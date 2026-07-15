@@ -1,0 +1,113 @@
+<div class="col-md-6">
+
+
+    <div class="card shadow">
+
+
+        <div class="card-header">
+            Tasks
+        </div>
+
+
+
+        <div class="card-body">
+
+
+            <form method="post" action="{% url 'create_task' %}" class="d-flex gap-2">
+
+
+                {% csrf_token %}
+
+
+                <input class="form-control" name="tasks" placeholder="New task">
+
+
+                <button class="btn btn-primary">
+
+                    Add
+
+                </button>
+
+
+            </form>
+
+
+
+
+
+            <ul id="task-list" class="list-group mt-3">
+
+                {% for task in tasks %}
+                <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ task.id }}">
+
+                    <div class="d-flex align-items-center gap-3">
+
+                        <span class="drag-handle" style="cursor:grab;">
+                            ☰
+                        </span>
+
+                        <div>
+
+                            <strong>{{ task.title }}</strong>
+
+                            {% if task.description %}
+                            <br>
+                            <small class="text-muted">
+                                {{ task.description|truncatechars:40 }}
+                            </small>
+                            {% endif %}
+
+                        </div>
+
+                    </div>
+
+                    <div class="d-flex gap-2">
+
+                        <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
+                            data-bs-target="#taskModal{{ task.id }}">
+
+                            Edit
+
+                        </button>
+
+                        <form method="POST" action="{% url 'delete_task' task.id %}">
+
+                            {% csrf_token %}
+
+                            <button class="btn btn-sm btn-danger">
+                                Delete
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                </li>
+
+                {% empty %}
+
+                <li class="list-group-item">
+                    No tasks
+                </li>
+
+                {% endfor %}
+
+            </ul>
+
+
+
+        </div>
+
+
+    </div>
+
+
+</div>
+
+
+<script>
+enableSort(
+    "task-list",
+    "{% url 'task_order' %}"
+);
+</script>

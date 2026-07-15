@@ -1,0 +1,121 @@
+<div class="col-md-6">
+    <div class="card shadow">
+        <div class="card-header">
+
+            Timers
+
+        </div>
+        <div class="card-body">
+
+
+
+            <form method="post" action="{% url 'create_timer' %}">
+
+
+                {% csrf_token %}
+
+
+
+                <input class="form-control mb-2" name="timers" placeholder="Timer name" required>
+
+
+
+                <input class="form-control mb-2" type="number" name="duration" placeholder="Minutes" min="1" required>
+                
+
+
+
+                <button class="btn btn-success">
+
+                    Add Timer
+
+                </button>
+
+
+            </form>
+
+
+
+
+
+
+            <ul id="timer-list" class="list-group mt-3">
+
+                {% for timer in timers %}
+
+                <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ timer.id }}">
+
+                    <div class="d-flex align-items-center gap-3">
+
+                        <span class="drag-handle" style="cursor:grab;">
+                            ☰
+                        </span>
+
+                        <div>
+
+                            <strong>{{ timer.title }}</strong>
+
+                            <br>
+
+                            <small class="text-muted">
+
+                                {{ timer.duration }}
+
+                            </small>
+
+                        </div>
+
+                    </div>
+
+                    <div class="d-flex gap-2">
+
+                        <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
+                            data-bs-target="#timerModal{{ timer.id }}">
+
+                            Edit
+
+                        </button>
+
+                        <form method="POST" action="{% url 'delete_timer' timer.id %}">
+
+                            {% csrf_token %}
+
+                            <button class="btn btn-sm btn-danger">
+                                Delete
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                </li>
+
+                {% empty %}
+
+                <li class="list-group-item">
+                    No timers yet
+                </li>
+
+                {% endfor %}
+
+            </ul>
+
+
+
+        </div>
+
+
+
+    </div>
+
+
+
+</div>
+
+
+<script>
+    enableSort(
+    "timer-list",
+    "{% url 'timer_order' %}"
+);
+</script>

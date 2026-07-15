@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}
+Login | LuminoPal
+{% endblock %}
+
+
+{% block content %}
+
+<div class="container mt-5">
+
+    <div class="row justify-content-center">
+
+        <div class="col-md-5">
+
+            <div class="card shadow">
+
+                <div class="card-body">
+
+
+                    <h2 class="text-center mb-4">
+                        Login
+                    </h2>
+
+
+                    <form method="POST">
+
+                        {% csrf_token %}
+
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Username
+                            </label>
+
+                            <input 
+                                class="form-control"
+                                name="username"
+                                placeholder="Username"
+                                required
+                            >
+
+                        </div>
+
+
+
+                        <div class="mb-3">
+
+                            <label class="form-label">
+                                Password
+                            </label>
+
+                            <input 
+                                class="form-control"
+                                name="password"
+                                type="password"
+                                placeholder="Password"
+                                required
+                            >
+
+                        </div>
+
+
+
+                        <button class="btn btn-primary w-100">
+                            Login
+                        </button>
+
+
+                    </form>
+
+
+
+                    <div class="text-center mt-3">
+
+
+                        <p class="mb-1">
+                            Don't have an account?
+                            <a href="{% url 'register' %}">
+                                Register
+                            </a>
+                        </p>
+                    </div>
+
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+{% endblock %}
