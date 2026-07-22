@@ -1,4 +1,18 @@
 dependencies:
+  espressif/esp_lvgl_port:
+    component_hash: fb6c1fdfe70d4ca39a035d63ca394a35f17ec84ce16ff98ecb13a54155d75da4
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=5.2'
+    - name: lvgl/lvgl
+      registry_url: https://components.espressif.com
+      require: public
+      version: '>=8,<10'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 2.8.0~1
   idf:
     source:
       type: idf
@@ -18,9 +32,10 @@ dependencies:
       type: service
     version: 2.0.0
 direct_dependencies:
+- espressif/esp_lvgl_port
 - idf
 - lvgl/lvgl
 - waveshare/esp_lcd_st7735
-manifest_hash: 0348c31b2d5d238c74db79a5d7dee4cbabfa56a4ccbd0f492faa51857fb16ade
+manifest_hash: def6118ae6ce76910fb0b85a6ff6d15ea3262a2e5960fb235e0baa778d1801bb
 target: esp32s3
 version: 2.0.0
