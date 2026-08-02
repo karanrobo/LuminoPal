@@ -7,49 +7,61 @@
 
 
 <script>
-    function enableSort(id, url){
+    function enableSort(id, url) {
 
-    new Sortable(document.getElementById(id),{
+        new Sortable(document.getElementById(id), {
 
-        animation:150,
+            animation: 150,
 
-        handle:".drag-handle",
+            handle: ".drag-handle",
 
-        onEnd:function(){
+            onEnd: function () {
 
-            let order=[];
+                let order = [];
 
-            document.querySelectorAll("#"+id+" li")
-            .forEach((item,index)=>{
+                document.querySelectorAll("#" + id + " li")
+                    .forEach((item, index) => {
 
-                order.push({
-                    id:item.dataset.id,
-                    order:index
+                        order.push({
+                            id: item.dataset.id,
+                            order: index
+                        });
+
+                    });
+
+                fetch(url, {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-CSRFToken": "{{ csrf_token }}"
+                    },
+
+                    body: JSON.stringify(order)
+
                 });
 
-            });
+            }
 
-            fetch(url,{
+        });
 
-                method:"POST",
-
-                headers:{
-                    "Content-Type":"application/json",
-                    "X-CSRFToken":"{{ csrf_token }}"
-                },
-
-                body:JSON.stringify(order)
-
-            });
-
-        }
-
-    });
-
-}
+    }
 
 </script>
-
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="alert"
+                aria-label="Close">
+            </button>
+        </div>
+    {% endfor %}
+{% endif %}
 
 <div class="d-flex">
 
@@ -57,52 +69,94 @@
     <!-- Sidebar -->
 
     <div id="sidebar"
-         class="bg-dark text-white vh-100 p-3 collapse show"
-         style="width:250px;">
+     class="bg-dark text-white vh-100 p-3 collapse show"
+     style="width:250px;">
 
+    <h3 class="mb-4">
+        LuminoPal
+    </h3>
 
-        <h3 class="mb-4">
-            LuminoPal
-        </h3>
+    <ul class="nav flex-column">
 
+        <li class="nav-item">
+        <a href="{% url 'home' %}" class="nav-link text-white">
+            Tasks
+        </a>
+    </li>
 
-        <ul class="nav flex-column">
+    <li class="nav-item">
+        <a href="{% url 'lamp' %}" class="nav-link text-white">
+            Lamp
+        </a>
+    </li>
 
-            <li class="nav-item">
-                <a href="#" class="nav-link text-white">
-                    Dashboard
-                </a>
-            </li>
+    </ul>
 
+    <!-- Push lamp widget to bottom -->
+<div class="mt-auto">
 
-            <li class="nav-item">
-                <a href="#" class="nav-link text-white">
-                    Tasks
-                </a>
-            </li>
+    <div class="card bg-secondary text-white border-0 shadow-sm">
 
+        <div class="card-body">
 
-            <li class="nav-item">
-                <a href="#" class="nav-link text-white">
-                    Timers
-                </a>
-            </li>
+            <h6 class="card-title mb-3">
+                💡 Lamp
+            </h6>
 
+            {% if lamp %}
 
-            <li class="nav-item">
-                <a href="#" class="nav-link text-white">
-                    Settings
-                </a>
-            </li>
+                {% if lamp.is_online %}
 
+                    <div class="d-flex align-items-center mb-2">
 
-        </ul>
+                        <span class="badge bg-success me-2">
+                            Online
+                        </span>
 
+                        <small>
+                            {{ lamp.name }}
+                        </small>
+
+                    </div>
+
+                {% else %}
+
+                    <div class="d-flex align-items-center mb-2">
+
+                        <span class="badge bg-danger me-2">
+                            Offline
+                        </span>
+
+                        <small>
+                            {{ lamp.name }}
+                        </small>
+
+                    </div>
+
+                {% endif %}
+
+            {% else %}
+
+                <div class="d-flex align-items-center mb-2">
+
+                    <span class="badge bg-danger me-2">
+                        Not Paired
+                    </span>
+
+                </div>
+
+                <small class="text-light opacity-75">
+                    Pair your LuminoPal.
+                </small>
+
+            {% endif %}
+
+        </div>
 
     </div>
 
-
-
+</div>
+</div>
 
 
     <!-- Main Content -->
@@ -114,11 +168,7 @@
         <!-- Navbar -->
 
         <nav class="navbar bg-white shadow-sm px-4">
-            <button 
-                class="btn btn-outline-dark"
-                type="button"
-                data-bs-toggle="collapse"
-                data-bs-target="#sidebar">
+            <button class="btn btn-outline-dark" type="button" data-bs-toggle="collapse" data-bs-target="#sidebar">
                 ☰
             </button>
 
@@ -129,8 +179,7 @@
                 </span>
 
 
-                <a href="{% url 'logout' %}" 
-                   class="btn btn-danger">
+                <a href="{% url 'logout' %}" class="btn btn-danger">
 
                     Logout
 
@@ -169,10 +218,16 @@
 
             <div class="row mt-4">
                 <!-- Tasks -->
-                {% include 'webapp/tasks.html' %}
+{% if page == "home" %}
 
-                <!-- Timers -->
-                {% include 'webapp/timers.html' %}
+    {% include "webapp/tasks.html" %}
+
+{% elif page == "lamp" %}
+
+    {% include "webapp/lamp.html" %}
+
+{% endif %}
+                
 
             </div>
         </div>
@@ -180,6 +235,5 @@
 </div>
 
 {% include 'webapp/tasks_modal.html' %}
-{% include 'webapp/timers_modal.html' %}
 
 {% endblock %}

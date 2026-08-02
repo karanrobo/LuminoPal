@@ -1,76 +1,178 @@
-<div class="col-md-6">
-
+<div class="col-12">
 
     <div class="card shadow">
-
 
         <div class="card-header">
             Tasks
         </div>
 
 
-
         <div class="card-body">
 
 
-            <form method="post" action="{% url 'create_task' %}" class="d-flex gap-2">
-
+            <!-- Quick create -->
+            <form method="post"
+                  action="{% url 'create_task' %}"
+                  class="d-flex gap-2">
 
                 {% csrf_token %}
 
-
-                <input class="form-control" name="tasks" placeholder="New task">
+                <input
+                    class="form-control"
+                    name="title"
+                    placeholder="New task">
 
 
                 <button class="btn btn-primary">
-
                     Add
-
                 </button>
-
 
             </form>
 
 
 
-
-
             <ul id="task-list" class="list-group mt-3">
 
+
                 {% for task in tasks %}
-                <li class="list-group-item d-flex justify-content-between align-items-center" data-id="{{ task.id }}">
 
-                    <div class="d-flex align-items-center gap-3">
+                <li class="list-group-item d-flex justify-content-between align-items-center"
+                    data-id="{{ task.id }}">
 
-                        <span class="drag-handle" style="cursor:grab;">
+
+                    <div class="d-flex align-items-start gap-3">
+
+
+                        <span class="drag-handle"
+                              style="cursor:grab;">
                             ☰
                         </span>
 
+
                         <div>
 
-                            <strong>{{ task.title }}</strong>
+                            <strong>
+                                {{ task.title }}
+                            </strong>
+
+                            <span class="badge bg-secondary">
+                                {{ task.get_status_display }}
+                            </span>
+                            
 
                             {% if task.description %}
-                            <br>
+                           
+
                             <small class="text-muted">
                                 {{ task.description|truncatechars:40 }}
                             </small>
+
                             {% endif %}
+
+
+
+                            {% if task.due_at %}
+
+                            <br>
+                            <small>
+                                📅 Due:
+                                {{ task.due_at|date:"d M H:i" }}
+                            </small>
+                            {% endif %}
+
+
+
+                            {% if task.timer_ends_at %}
+
+<br>
+
+<small class="timer"
+       data-end="{{ task.timer_ends_at|date:'c' }}">
+    ⏱ Timer:
+</small>
+
+
+{% elif task.timer_duration %}
+
+<br>
+
+<small>
+    ⏱ Timer set:
+    {{ task.timer_duration }}
+</small>
+
+{% endif %}
+
+                            {% if task.timer_ends_at %}
+                            <br>
+
+                            <small class="text-success">
+                                ▶ Running
+                            </small>
+
+                            {% endif %}
+
 
                         </div>
 
+
                     </div>
+
+
+
 
                     <div class="d-flex gap-2">
 
-                        <button class="btn btn-sm btn-warning" data-bs-toggle="modal"
+
+                        {% if task.timer_duration and not task.timer_ends_at %}
+
+                        <form method="POST"
+                              action="{% url 'start_timer' task.id %}">
+
+                            {% csrf_token %}
+
+                            <button class="btn btn-sm btn-success">
+                                Start
+                            </button>
+
+                        </form>
+
+                        {% endif %}
+
+
+
+                        {% if task.timer_ends_at %}
+
+                        <form method="POST"
+                              action="{% url 'stop_timer' task.id %}">
+
+                            {% csrf_token %}
+
+                            <button class="btn btn-sm btn-secondary">
+                                Stop
+                            </button>
+
+                        </form>
+
+                        {% endif %}
+
+
+
+
+                        <button
+                            class="btn btn-sm btn-warning"
+                            data-bs-toggle="modal"
                             data-bs-target="#taskModal{{ task.id }}">
 
                             Edit
 
                         </button>
 
-                        <form method="POST" action="{% url 'delete_task' task.id %}">
+
+
+
+                        <form method="POST"
+                              action="{% url 'delete_task' task.id %}">
 
                             {% csrf_token %}
 
@@ -80,34 +182,78 @@
 
                         </form>
 
+
                     </div>
+
 
                 </li>
 
+
                 {% empty %}
+
 
                 <li class="list-group-item">
                     No tasks
                 </li>
 
+
                 {% endfor %}
+
 
             </ul>
 
 
-
         </div>
 
-
     </div>
-
 
 </div>
 
 
+
 <script>
+
 enableSort(
     "task-list",
     "{% url 'task_order' %}"
 );
+setInterval(() => {
+
+    document.querySelectorAll(".timer").forEach(timer => {
+
+        const endString = timer.dataset.end;
+
+        if (!endString) {
+            timer.textContent = "⏱ No active timer";
+            return;
+        }
+
+        const end = new Date(endString);
+
+        if (isNaN(end.getTime())) {
+            timer.textContent = "⏱ Invalid timer";
+            return;
+        }
+
+        let diff = end - new Date();
+
+        if (diff <= 0) {
+            timer.textContent = "⏱ Finished";
+            return;
+        }
+
+        const hours = Math.floor(diff / 3600000);
+        diff %= 3600000;
+
+        const mins = Math.floor(diff / 60000);
+        diff %= 60000;
+
+        const secs = Math.floor(diff / 1000);
+
+        timer.textContent =
+            `⏱ ${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
+    });
+
+}, 1000);
 </script>

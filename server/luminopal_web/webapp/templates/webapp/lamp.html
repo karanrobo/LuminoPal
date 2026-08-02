@@ -1,0 +1,113 @@
+<div class="col-12">
+
+    <div class="card shadow">
+
+        <div class="card-header">
+            My Lamp
+        </div>
+
+        <div class="card-body">
+
+            {% if lamp %}
+
+                <h5>{{ lamp.name }}</h5>
+
+                {% if lamp.is_online %}
+                    <span class="badge bg-success">Online</span>
+                {% else %}
+                    <span class="badge bg-secondary">Offline</span>
+                {% endif %}
+
+                <hr>
+
+                <p>
+                    <strong>Device ID:</strong><br>
+                    {{ lamp.device_id }}
+                </p>
+
+                {% if lamp.wifi_name %}
+                <p>
+                    <strong>Wi-Fi</strong><br>
+                    {{ lamp.wifi_name }}
+                </p>
+                {% endif %}
+
+                {% if lamp.current_task %}
+                <p>
+                    <strong>Current task</strong><br>
+                    {{ lamp.current_task.title }}
+                </p>
+                {% endif %}
+
+                {% if lamp.last_seen %}
+                <p>
+                    <strong>Last seen</strong><br>
+                    {{ lamp.last_seen|timesince }} ago
+                </p>
+                {% endif %}
+
+                <div class="d-flex gap-2">
+
+                    <button
+                        class="btn btn-warning"
+                        data-bs-toggle="modal"
+                        data-bs-target="#lampModal">
+                        Rename
+                    </button>
+
+                    <form method="POST"
+                          action="{% url 'lamp_unpair' lamp.id %}">
+
+                        {% csrf_token %}
+
+                        <button class="btn btn-danger">
+                            Unpair
+                        </button>
+
+                    </form>
+
+                </div>
+
+            {% else %}
+
+                <div class="text-center py-4">
+
+                    <h5>No lamp paired</h5>
+
+                    <p class="text-muted">
+                        Enter the pairing code shown on your LuminoPal to connect it.
+                    </p>
+<form method="POST" action="{% url 'lamp_pair' %}"
+      class="row g-2 justify-content-center">
+
+    {% csrf_token %}
+
+    <div class="col-md-4">
+
+        <input
+            type="text"
+            name="pair_code"
+            maxlength="6"
+            class="form-control text-uppercase text-center"
+            placeholder="ABC123">
+
+    </div>
+
+    <div class="col-auto">
+
+        <button class="btn btn-primary">
+            Pair Lamp
+        </button>
+
+    </div>
+
+</form>
+                </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+</div>

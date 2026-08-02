@@ -51,7 +51,7 @@ def login_view(request):
                 request,
                 user
             )
-            return redirect("/webapp/home")
+            return redirect("home")
     
     return render(
         request,
