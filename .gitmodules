@@ -1,3 +1,0 @@
-[submodule "esp32_lamp/components/lvgl"]
-	path = esp32_lamp/components/lvgl
-	url = https://github.com/lvgl/lvgl.git

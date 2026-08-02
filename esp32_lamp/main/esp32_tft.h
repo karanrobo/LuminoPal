@@ -1,3 +1,5 @@
+
+
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -10,7 +12,10 @@
 #include "esp_lcd_panel_vendor.h"
 #include "esp_lcd_st7735.h"
 #include "esp_lvgl_port.h"
+#include "lvgl.h"
 
+#ifndef ESP_TFT_H
+#define ESP_TFT_H
 
 
 #define LCD_SPI_NUM     SPI2_HOST
@@ -45,6 +50,24 @@ esp_err_t lcd_init(void);
 
 // void hue_shift_cb(lv_timer_t *timer);
 
-void drawText(char *str);
+// void drawText(char *str);
+
+esp_err_t esp_tft_init(void);
+
+void esp_tft_show_task(
+    const char *title,
+    const char *status,
+    lv_color_t status_color);
+
+void esp_tft_update(
+    const char *title,
+    const char *footer
+);
+
+
+void esp_tft_show_code(const char *code);
 
 // void initAndDrawTFT();
+
+
+#endif

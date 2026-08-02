@@ -6,6 +6,14 @@ static esp_lcd_panel_io_handle_t lcd_io = NULL;
 static esp_lcd_panel_handle_t lcd_panel = NULL;
 
 
+static lv_obj_t *title_label = NULL;
+static lv_obj_t *footer_label = NULL;
+
+static lv_obj_t *task_card;
+static lv_obj_t *task_title;
+static lv_obj_t *task_status;
+
+
 esp_err_t lcd_backlight_init(void)
 {
     gpio_config_t bk_gpio_config = {
@@ -172,127 +180,459 @@ esp_err_t lcd_init(void)
 //         hue = 0;
 // }
 
-static void create_task_card(
-    lv_obj_t *parent,
-    const char *title,
-    const char *status,
-    lv_color_t status_color)
+static void create_task_card(lv_obj_t *parent)
 {
-    lv_obj_t *card = lv_obj_create(parent);
+    task_card = lv_obj_create(parent);
 
-    lv_obj_set_width(card, LV_PCT(100));
-    lv_obj_set_height(card, 30);
+    lv_obj_set_width(task_card, LV_PCT(100));
+    lv_obj_set_height(task_card, 62);
 
-    lv_obj_set_style_radius(card, 10, 0);
-    lv_obj_set_style_bg_color(card, lv_color_hex(0x000000), 0);
-    lv_obj_set_style_border_width(card, 0, 0);
+    lv_obj_set_style_radius(task_card, 10, 0);
 
-    // Horizontal layout
-    lv_obj_set_flex_flow(card, LV_FLEX_FLOW_ROW);
+    lv_obj_set_style_bg_color(
+        task_card,
+        lv_color_hex(0x111827),
+        0
+    );
+
+    lv_obj_set_style_border_width(task_card, 1, 0);
+
+    lv_obj_set_style_border_color(
+        task_card,
+        lv_palette_main(LV_PALETTE_CYAN),
+        0
+    );
+
+    lv_obj_set_style_pad_all(task_card, 6, 0);
+
+    lv_obj_set_flex_flow(
+        task_card,
+        LV_FLEX_FLOW_COLUMN
+    );
+
     lv_obj_set_flex_align(
-        card,
-        LV_FLEX_ALIGN_SPACE_BETWEEN,
+        task_card,
         LV_FLEX_ALIGN_CENTER,
-        LV_FLEX_ALIGN_CENTER);
+        LV_FLEX_ALIGN_CENTER,
+        LV_FLEX_ALIGN_CENTER
+    );
 
-    lv_obj_set_style_pad_left(card, 0, 0);
-    lv_obj_set_style_pad_right(card, 0, 0);
 
-    lv_obj_t *task = lv_label_create(card);
-    lv_label_set_text(task, title);
+    /* Heading */
 
-    lv_obj_set_style_text_color(task, lv_color_white(), 0);
+    lv_obj_t *heading = lv_label_create(task_card);
 
-    lv_obj_t *stat = lv_label_create(card);
-    lv_label_set_text(stat, status);
+    lv_label_set_text(
+        heading,
+        "CURRENT TASK"
+    );
 
-    lv_obj_set_style_text_color(stat, status_color, 0);
+    lv_obj_set_style_text_font(
+        heading,
+        &lv_font_montserrat_14,
+        0
+    );
+
+    lv_obj_set_style_text_color(
+        heading,
+        lv_color_hex(0x94A3B8),
+        0
+    );
+
+
+    /* Main task */
+
+    task_title = lv_label_create(task_card);
+
+    lv_label_set_long_mode(
+        task_title,
+        LV_LABEL_LONG_DOT
+    );
+
+    lv_obj_set_width(
+        task_title,
+        LV_PCT(100)
+    );
+
+    lv_obj_set_style_text_align(
+        task_title,
+        LV_TEXT_ALIGN_CENTER,
+        0
+    );
+
+    lv_obj_set_style_text_font(
+        task_title,
+        &lv_font_montserrat_14,
+        0
+    );
+
+    lv_obj_set_style_text_color(
+        task_title,
+        lv_color_white(),
+        0
+    );
+
+    lv_label_set_text(
+        task_title,
+        "--"
+    );
+
+
+    /* Status */
+
+    task_status = lv_label_create(task_card);
+
+    lv_obj_set_style_text_font(
+        task_status,
+        &lv_font_montserrat_14,
+        0
+    );
+
+    lv_obj_set_style_text_color(
+        task_status,
+        lv_color_hex(0x22C55E),
+        0
+    );
+
+    lv_label_set_text(
+        task_status,
+        "Waiting"
+    );
+}
+void esp_tft_show_task(const char *title,
+                       const char *status,
+                       lv_color_t color)
+{
+    if (!task_title)
+        return;
+
+    lvgl_port_lock(0);
+
+    lv_label_set_text(task_title, title);
+
+    lv_label_set_text_fmt(task_status,
+                          LV_SYMBOL_OK " %s",
+                          status);
+
+    lv_obj_set_style_text_color(task_status,
+                                color,
+                                0);
+
+    lvgl_port_unlock();
 }
 
-void drawText(char *str) {
-    ESP_ERROR_CHECK(lcd_init());
-    esp_lcd_panel_set_gap(lcd_panel, 0, 0);
+esp_err_t esp_tft_init(void)
+{
 
-    /* Initialize LVGL port */
-    lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
-    ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
+    ESP_ERROR_CHECK(lcd_init());
+
+
+    ESP_ERROR_CHECK(
+        esp_lcd_panel_set_gap(
+            lcd_panel,
+            0,
+            0
+        )
+    );
+
+
+    /*
+     * Add LVGL display
+     */
+
     lvgl_port_display_cfg_t disp_cfg = {
+
         .io_handle = lcd_io,
+
         .panel_handle = lcd_panel,
 
         .buffer_size = LCD_H_RES * 20,
+
         .double_buffer = true,
 
         .hres = LCD_H_RES,
+
         .vres = LCD_V_RES,
 
         .monochrome = false,
 
+
         .rotation = {
+
             .swap_xy = true,
+
             .mirror_x = false,
+
             .mirror_y = true,
+
         },
+
 
         .flags = {
+
             .buff_dma = true,
+
         },
+
     };
-  
-    lvgl_port_add_disp(&disp_cfg);
-    lv_obj_t *screen = lv_screen_active();
-    
-    /* Create UI */
+
+
+    lv_display_t *disp =
+        lvgl_port_add_disp(
+            &disp_cfg
+        );
+
+
+    if(disp == NULL)
+    {
+        return ESP_FAIL;
+    }
+
+
+
     lvgl_port_lock(0);
 
-    // Active screen
 
-lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
-lv_obj_set_style_pad_all(screen, 8, 0);
 
-// Root container
-lv_obj_t *root = lv_obj_create(screen);
-lv_obj_remove_style_all(root);
+    lv_obj_t *screen =
+        lv_display_get_screen_active(
+            disp
+        );
 
-lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
 
-lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
-lv_obj_set_flex_align(
-    root,
-    LV_FLEX_ALIGN_START,
-    LV_FLEX_ALIGN_START,
-    LV_FLEX_ALIGN_START
-);
+    lv_obj_set_style_bg_color(
+        screen,
+        lv_color_white(),
+        0
+    );
 
-lv_obj_set_style_pad_gap(root, 6, 0);
 
-lv_obj_t *title = lv_label_create(root);
-
-lv_label_set_text(title, "Today's Tasks");
-
-lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
-lv_obj_set_style_text_color(title, lv_palette_main(LV_PALETTE_CYAN), 0);
-
-create_task_card(
-    root,
-    "Study Math",
-    "ACTIVE",
-    lv_color_white());
+    lv_obj_set_style_pad_all(
+        screen,
+        8,
+        0
+    );
 
 
 
-lv_obj_t *footer = lv_label_create(root);
+    /*
+     * Root container
+     */
 
-lv_label_set_text(
-    footer,
-    "Tasks: 3    Done: 1");
+    lv_obj_t *root =
+        lv_obj_create(screen);
 
-lv_obj_set_style_text_color(
-    footer,
-    lv_palette_lighten(LV_PALETTE_GREY, 2),
-    0);
+
+    lv_obj_remove_style_all(root);
+
+
+    lv_obj_set_size(
+        root,
+        LV_PCT(100),
+        LV_PCT(100)
+    );
+
+
+    lv_obj_set_flex_flow(
+        root,
+        LV_FLEX_FLOW_COLUMN
+    );
+
+
+    lv_obj_set_style_pad_gap(
+        root,
+        6,
+        0
+    );
+
+
+
+    /*
+     * Title
+     */
+
+    title_label =
+        lv_label_create(root);
+
+
+    lv_label_set_text(
+        title_label,
+        "LuminoPal"
+    );
+
+
+    lv_obj_set_style_text_font(
+        title_label,
+        &lv_font_montserrat_14,
+        0
+    );
+
+
+    lv_obj_set_style_text_color(
+        title_label,
+        lv_palette_main(
+            LV_PALETTE_CYAN
+        ),
+        0
+    );
+
+    create_task_card(root);
+
+
+    /*
+     * Footer
+     */
+
+    footer_label =
+        lv_label_create(root);
+
+
+    lv_label_set_text(
+        footer_label,
+        "Ready"
+    );
+
+
+    lv_obj_set_style_text_color(
+        footer_label,
+        lv_palette_lighten(
+            LV_PALETTE_GREY,
+            2
+        ),
+        0
+    );
+
+
     lvgl_port_unlock();
+
+
+    ESP_LOGI(
+        TAG,
+        "TFT ready"
+    );
+
+
+    return ESP_OK;
 }
+
+
+void esp_tft_update(
+    const char *title,
+    const char *footer
+)
+{
+
+    if(title_label == NULL ||
+       footer_label == NULL)
+    {
+        return;
+    }
+
+
+    lvgl_port_lock(0);
+
+
+    lv_label_set_text(
+        title_label,
+        title
+    );
+
+
+
+
+    lv_label_set_text(
+        footer_label,
+        footer
+    );
+
+
+    lvgl_port_unlock();
+
+}
+
+//     ESP_ERROR_CHECK(lcd_init());
+//     esp_lcd_panel_set_gap(lcd_panel, 0, 0);
+
+//     /* Initialize LVGL port */
+//     lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+//     ESP_ERROR_CHECK(lvgl_port_init(&lvgl_cfg));
+//     lvgl_port_display_cfg_t disp_cfg = {
+//         .io_handle = lcd_io,
+//         .panel_handle = lcd_panel,
+
+//         .buffer_size = LCD_H_RES * 20,
+//         .double_buffer = true,
+
+//         .hres = LCD_H_RES,
+//         .vres = LCD_V_RES,
+
+//         .monochrome = false,
+
+//         .rotation = {
+//             .swap_xy = true,
+//             .mirror_x = false,
+//             .mirror_y = true,
+//         },
+
+//         .flags = {
+//             .buff_dma = true,
+//         },
+//     };
+  
+//     lvgl_port_add_disp(&disp_cfg);
+//     lv_obj_t *screen = lv_screen_active();
+    
+//     /* Create UI */
+//     lvgl_port_lock(0);
+
+//     // Active screen
+
+// lv_obj_set_style_bg_color(screen, lv_color_white(), 0);
+// lv_obj_set_style_pad_all(screen, 8, 0);
+
+// // Root container
+// lv_obj_t *root = lv_obj_create(screen);
+// lv_obj_remove_style_all(root);
+
+// lv_obj_set_size(root, LV_PCT(100), LV_PCT(100));
+
+// lv_obj_set_flex_flow(root, LV_FLEX_FLOW_COLUMN);
+// lv_obj_set_flex_align(
+//     root,
+//     LV_FLEX_ALIGN_START,
+//     LV_FLEX_ALIGN_START,
+//     LV_FLEX_ALIGN_START
+// );
+
+// lv_obj_set_style_pad_gap(root, 6, 0);
+
+// lv_obj_t *title = lv_label_create(root);
+
+// lv_label_set_text(title, "Today's Tasks");
+
+// lv_obj_set_style_text_font(title, &lv_font_montserrat_14, 0);
+// lv_obj_set_style_text_color(title, lv_palette_main(LV_PALETTE_CYAN), 0);
+
+// create_task_card(
+//     root,
+//     "Study Math",
+//     "ACTIVE",
+//     lv_color_white());
+
+
+
+// lv_obj_t *footer = lv_label_create(root);
+
+// lv_label_set_text(
+//     footer,
+//     "Tasks: 3    Done: 1");
+
+// lv_obj_set_style_text_color(
+//     footer,
+//     lv_palette_lighten(LV_PALETTE_GREY, 2),
+//     0);
+//     lvgl_port_unlock();
+// }
 
 // void initAndDrawTFT() {
 //     ESP_ERROR_CHECK(lcd_init());
@@ -328,3 +668,10 @@ lv_obj_set_style_text_color(
 //     lvgl_port_unlock();
 // }
 
+
+
+
+void esp_tft_show_code(const char *code) {
+
+    
+}

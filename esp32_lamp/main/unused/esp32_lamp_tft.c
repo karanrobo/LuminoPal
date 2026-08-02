@@ -1,165 +1,17 @@
-#include <stdint.h>
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-
 #include "nvs_flash.h"
 #include "esp32_wifi.h"
+#include "esp32_tft.h"
+#include "esp32_home_wifi_mock.h"
 #include "esp32_lamp_identity.h"
 #include "esp32_lamp_api.h"
 
 #include "esp32_oled.h"
-#include "esp32_ldr.h"
-
-#include "esp32_pir.h"
 
 #include "driver/uart.h"
-
 #include "esp_mac.h"
 #include "esp_log.h"
 
-#include "esp32_tft.h"
-
-
-#include "esp_err.h"
-
-
-#include "esp32_ldr.h"
-#include "esp32_pir.h"
-#include "esp32_buttons.h"
-#include "esp32_buzzer.h"
-
-
-
-
- 
-#include "esp_adc/adc_oneshot.h"
-
- 
-#include "driver/ledc.h"
-
-
-#define LDR_ADC_GPIO       36
-#define LDR_ADC_UNIT       ADC_UNIT_1
-#define LDR_ADC_CHANNEL    ADC_CHANNEL_0
-#define LDR_ADC_ATTEN      ADC_ATTEN_DB_12
- 
-/*
-* LED PWM output
-*/
-#define LED_PWM_GPIO       26
-#define LED_PWM_FREQUENCY  5000
-#define LED_PWM_RESOLUTION LEDC_TIMER_8_BIT
-#define LED_PWM_MAX_DUTY   255
- 
-#define UPDATE_PERIOD_MS   10
-
-#define PIR_GPIO GPIO_NUM_27
-
-static const char *TAG = "lighting";
- 
-static adc_oneshot_unit_handle_t adc_handle;
-static LightingController lighting_controller;
- 
- 
-static void configure_adc(void)
-{
-    adc_oneshot_unit_init_cfg_t unit_config = {
-        .unit_id = LDR_ADC_UNIT,
-        .ulp_mode = ADC_ULP_MODE_DISABLE
-    };
- 
-    ESP_ERROR_CHECK(
-        adc_oneshot_new_unit(
-            &unit_config,
-            &adc_handle
-        )
-    );
- 
-    adc_oneshot_chan_cfg_t channel_config = {
-        .atten = LDR_ADC_ATTEN,
-        .bitwidth = ADC_BITWIDTH_DEFAULT
-    };
- 
-    ESP_ERROR_CHECK(
-        adc_oneshot_config_channel(
-            adc_handle,
-            LDR_ADC_CHANNEL,
-            &channel_config
-        )
-    );
- 
-    ESP_LOGI(
-        TAG,
-        "ADC configured: GPIO%d, ADC1 channel %d",
-        LDR_ADC_GPIO,
-        LDR_ADC_CHANNEL
-    );
-}
- 
- 
-static void configure_pwm(void)
-{
-    ledc_timer_config_t timer_config = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = LED_PWM_RESOLUTION,
-        .timer_num = LEDC_TIMER_0,
-        .freq_hz = LED_PWM_FREQUENCY,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
- 
-    ESP_ERROR_CHECK(
-        ledc_timer_config(&timer_config)
-    );
- 
-    ledc_channel_config_t channel_config = {
-        .gpio_num = LED_PWM_GPIO,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
-        .duty = 0,
-        .hpoint = 0
-    };
- 
-    ESP_ERROR_CHECK(
-        ledc_channel_config(&channel_config)
-    );
- 
-    ESP_LOGI(
-        TAG,
-        "PWM configured: GPIO%d, frequency=%d Hz",
-        LED_PWM_GPIO,
-        LED_PWM_FREQUENCY
-    );
-}
- 
- 
-static void set_pwm_duty(uint16_t duty)
-{
-    if (duty > LED_PWM_MAX_DUTY)
-    {
-        duty = LED_PWM_MAX_DUTY;
-    }
- 
-    ESP_ERROR_CHECK(
-        ledc_set_duty(
-            LEDC_LOW_SPEED_MODE,
-            LEDC_CHANNEL_0,
-            duty
-        )
-    );
- 
-    ESP_ERROR_CHECK(
-        ledc_update_duty(
-            LEDC_LOW_SPEED_MODE,
-            LEDC_CHANNEL_0
-        )
-    );
-}
-
- 
- 
+static const char *TAG = "MAIN";
 
 void app_main(void)
 {
@@ -229,6 +81,8 @@ void app_main(void)
     ESP_ERROR_CHECK(
         lvgl_port_init(&lvgl_cfg));
 
+    ESP_ERROR_CHECK(
+        esp_tft_init());
 
     ESP_ERROR_CHECK(
         esp_oled_init());
@@ -238,8 +92,6 @@ void app_main(void)
         ESP_LOGI(
             TAG,
             "Waiting for home WiFi...");
-            esp_oled_update(
-                "Connect via phone!");
 
         vTaskDelay(
             pdMS_TO_TICKS(1000));
@@ -248,8 +100,6 @@ void app_main(void)
     ESP_LOGI(
         TAG,
         "Home WiFi ready");
-    esp_oled_update(
-                "Connected to wifi!");
 
     if (storage_is_paired())
     {
@@ -257,8 +107,6 @@ void app_main(void)
         ESP_LOGI(
             TAG,
             "Checking existing pairing...");
-        esp_oled_update(
-                "Checking if you paired already.");
 
         bool valid =
             api_check_pair_status(
@@ -276,9 +124,6 @@ void app_main(void)
 
             storage_clear_token();
         }
-    } else {
-         esp_oled_update(
-                "New pairing required");
     }
 
     /*
@@ -291,9 +136,6 @@ void app_main(void)
         ESP_LOGI(
             TAG,
             "Lamp not paired");
-        
-            esp_oled_update(
-                "Lamp not paired");
 
         while (!api_register_lamp(device_id))
         {
@@ -301,8 +143,6 @@ void app_main(void)
             ESP_LOGW(
                 TAG,
                 "Registration failed");
-             esp_oled_update(
-                "Registration failed. \n Trying again...");
 
             vTaskDelay(
                 pdMS_TO_TICKS(5000));
@@ -313,8 +153,6 @@ void app_main(void)
 
             ESP_LOGI(
                 TAG,
-                "Waiting for user pairing");
-             esp_oled_update(
                 "Waiting for user pairing");
 
             bool paired =
@@ -327,8 +165,6 @@ void app_main(void)
                 ESP_LOGI(
                     TAG,
                     "Pair successful");
-                 esp_oled_update(
-                "Paired successfully!");
 
                 break;
             }
@@ -347,6 +183,9 @@ void app_main(void)
             esp_oled_update(
                 pair_code);
 
+            esp_tft_update(
+                "Pair Lamp",
+                pair_code);
 
             vTaskDelay(
                 pdMS_TO_TICKS(5000));
@@ -360,6 +199,11 @@ void app_main(void)
     esp_oled_update(
         "Connected");
 
+    esp_tft_update(
+        "Lamp Ready",
+        "Connected");
+    esp_oled_update(
+        "Connected");
     vTaskDelay(
         pdMS_TO_TICKS(1000));
 
@@ -379,6 +223,10 @@ while (1)
 
     if (!task.paired)
     {
+        esp_tft_update(
+            "Pair Lamp",
+            "Not paired"
+        );
 
         esp_oled_update(
             "PAIR"
@@ -386,14 +234,23 @@ while (1)
     }
     else if (!task.has_task)
     {
+        esp_tft_update(
+            "No Tasks",
+            "All done!"
+        );
+
         esp_oled_update(
-            "No tasks"
+            "No deadline"
         );
     }
     else
     {
-        esp_oled_update(
-            task.title
+        esp_tft_show_task(
+            task.title,
+            task.description,
+            lv_palette_main(
+                LV_PALETTE_ORANGE
+            )
         );
 
         if (task.has_timer)
@@ -497,7 +354,3 @@ while (1)
     );
 }
 }
-
-
-
-

@@ -3,9 +3,7 @@
 #ifndef r307_H
 #define r307_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+
 
 /**
  * @brief INITIALIZE UART FOR R307 FINGERPRINT MODULE
@@ -226,8 +224,6 @@ uint8_t GetRandomCode(char r307_address[]);
  */
 void r307_response_parser(char instruction_code, uint8_t received_package[]);
 
-#ifdef __cplusplus
-}
-#endif
+
 
 #endif // r307_H
