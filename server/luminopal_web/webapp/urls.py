@@ -51,6 +51,12 @@ urlpatterns = [
         ),
 
     path(
+        "lamp/timer/toggle/",
+        views.timer_toggle,
+        name="timer_toggle"
+    ),
+
+    path(
         "task/create/",
         views.create_task,
         name="create_task"

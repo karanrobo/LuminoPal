@@ -562,3 +562,79 @@ def lamp_edit(request,id):
     return redirect(
         "lamp"
     )
+
+
+
+
+@csrf_exempt
+def timer_toggle(request):
+
+    lamp = get_lamp_from_request(request)
+
+    if lamp is None:
+        return JsonResponse(
+            {"error": "Unauthorized"},
+            status=401
+        )
+
+
+    task = lamp.current_task
+
+    if task is None:
+        return JsonResponse(
+            {"error": "No task selected"},
+            status=404
+        )
+
+
+    # Currently running -> pause
+    if task.status == "active":
+
+        if task.timer_ends_at:
+
+            remaining = (
+                task.timer_ends_at -
+                timezone.now()
+            )
+
+            if remaining.total_seconds() > 0:
+                task.timer_duration = remaining
+
+
+        task.timer_started_at = None
+        task.timer_ends_at = None
+        task.status = "paused"
+
+
+    # Currently paused/todo -> play
+    else:
+
+        now = timezone.now()
+
+        task.timer_started_at = now
+
+        task.timer_ends_at = (
+            now +
+            task.timer_duration
+        )
+
+        task.status = "active"
+
+
+    task.save()
+
+
+    return JsonResponse(
+        {
+            "success": True,
+            "status": task.status,
+            "timer_end":
+                int(task.timer_ends_at.timestamp())
+                if task.timer_ends_at
+                else 0,
+            "remaining":
+                int(task.timer_duration.total_seconds())
+                if task.timer_duration
+                else 0
+        }
+    )
