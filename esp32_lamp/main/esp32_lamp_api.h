@@ -15,14 +15,19 @@ typedef struct
     char title[64];
     char description[128];
 
-    time_t timer_end;
-    time_t deadline;
 
+    // Timer
     bool has_timer;
+    bool timer_running;
+
+    int remaining_seconds;
+
+
+    // Deadline
+    time_t deadline;
     bool has_deadline;
 
 } LampTask;
-
 
 bool api_register_lamp(
     const char *device_id
@@ -34,5 +39,8 @@ bool api_check_pair_status(
 
 
 LampTask api_get_tasks(const char *device_id);
+
+// need api for button pause/start 
+bool api_toggle_timer(const char *device_id);
 
 #endif

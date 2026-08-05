@@ -123,6 +123,14 @@ esp_err_t esp_oled_init(void)
         esp_lcd_panel_init(oled_panel)
     );
 
+    ESP_ERROR_CHECK(
+    esp_lcd_panel_mirror(
+        oled_panel,
+        false,   // horizontal flip
+        true     // vertical flip
+    )
+);
+
 
     ESP_ERROR_CHECK(
         esp_lcd_panel_disp_on_off(
@@ -213,3 +221,83 @@ void esp_oled_update(const char *text) {
 
 }
 
+void esp_oled_update_task(LampTask task)
+{
+    char buf[128];
+
+    lvgl_port_lock(0);
+
+
+    if (!task.paired)
+    {
+        snprintf(
+            buf,
+            sizeof(buf),
+            "NOT PAIRED\n\nOpen app"
+        );
+
+        lv_label_set_text(
+            oled_label,
+            buf
+        );
+
+        lvgl_port_unlock();
+        return;
+    }
+
+
+    if (!task.has_task)
+    {
+        snprintf(
+            buf,
+            sizeof(buf),
+            "No task"
+        );
+
+        lv_label_set_text(
+            oled_label,
+            buf
+        );
+
+        lvgl_port_unlock();
+        return;
+    }
+if (task.has_timer)
+{
+    int remaining = task.remaining_seconds;
+
+
+    if (remaining < 0) {
+        remaining = 0;
+    }
+  snprintf(
+        buf,
+        sizeof(buf),
+        "%s\n"
+        "-----------\n"
+        "%s %02d:%02d",
+        task.title,
+        task.timer_running ? "TIME" : "PAUSE",
+        remaining / 60,
+        remaining % 60
+    );
+
+}
+else
+{
+    snprintf(
+        buf,
+        sizeof(buf),
+        "%s",
+        task.title
+    );
+}
+
+    lv_label_set_text(
+        oled_label,
+        buf
+    );
+
+
+    lvgl_port_unlock();
+}

@@ -56,7 +56,7 @@ static bool button_pressed(gpio_num_t gpio,
     return false;
 }
 
-bool start_button_pressed(void)
+bool pause_start_button(void)
 {
     return button_pressed(
         START_BUTTON_GPIO,
@@ -65,7 +65,7 @@ bool start_button_pressed(void)
         &last_start_change);
 }
 
-bool reset_button_pressed(void)
+bool light_button(void)
 {
     return button_pressed(
         RESET_BUTTON_GPIO,

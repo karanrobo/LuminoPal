@@ -54,9 +54,7 @@ void buzzer_set(bool on)
             BUZZER_CHANNEL);
     }
 }
-
-
-void buzzer_tone(uint32_t frequency, uint32_t duty)
+void buzzer_tone(uint32_t frequency, uint32_t duration_ms)
 {
     ledc_set_freq(
         BUZZER_MODE,
@@ -66,9 +64,18 @@ void buzzer_tone(uint32_t frequency, uint32_t duty)
     ledc_set_duty(
         BUZZER_MODE,
         BUZZER_CHANNEL,
-        duty);
+        512);      // 50% duty
 
     ledc_update_duty(
         BUZZER_MODE,
         BUZZER_CHANNEL);
+
+    vTaskDelay(pdMS_TO_TICKS(duration_ms));
+
+    ledc_stop(
+        BUZZER_MODE,
+        BUZZER_CHANNEL,
+        0);        // Completely stop PWM
 }
+
+

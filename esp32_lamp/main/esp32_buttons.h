@@ -5,7 +5,7 @@
 #include "driver/gpio.h"
 
 
-#define START_BUTTON_GPIO    GPIO_NUM_32
+#define START_BUTTON_GPIO    GPIO_NUM_32 // resume/start
 #define RESET_BUTTON_GPIO    GPIO_NUM_33
 
 /**
@@ -16,12 +16,12 @@ void buttons_init(void);
 /**
  * @brief Returns true once when the Start button is pressed.
  */
-bool start_button_pressed(void);
+bool pause_start_button(void);
 
 /**
  * @brief Returns true once when the Reset button is pressed.
  */
-bool reset_button_pressed(void);
+bool light_button(void);
 
 
 

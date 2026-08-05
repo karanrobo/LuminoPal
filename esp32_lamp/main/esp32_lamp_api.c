@@ -6,6 +6,7 @@
 #include "cJSON.h"
 
 #include "esp32_lamp_identity.h"
+#include "esp_crt_bundle.h"
 
 #include <string.h>
 #include <stdio.h>
@@ -100,8 +101,9 @@ bool api_register_lamp(const char *device_id)
     ESP_LOGI(TAG, "JSON: %s", json);
 
     esp_http_client_config_t config = {
-        .url = "http://192.168.1.112:8000/webapp/lamp/register/",
+        .url = "https://karanrobo.pythonanywhere.com/webapp/lamp/register/",
         .event_handler = http_event_handler,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client =
@@ -184,12 +186,13 @@ bool api_check_pair_status(const char *device_id)
 
     snprintf(url,
              sizeof(url),
-             "http://192.168.1.112:8000/webapp/lamp/status/?device_id=%s",
+             "https://karanrobo.pythonanywhere.com/webapp/lamp/status/?device_id=%s",
              device_id);
 
     esp_http_client_config_t config = {
         .url = url,
         .event_handler = http_event_handler,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
     esp_http_client_handle_t client =
@@ -300,16 +303,16 @@ LampTask api_get_tasks(
     snprintf(
         url,
         sizeof(url),
-        "http://192.168.1.112:8000/webapp/lamp/get_tasks/?device_id=%s",
+        "https://karanrobo.pythonanywhere.com/webapp/lamp/get_tasks/?device_id=%s",
         device_id
     );
 
 
 
-    esp_http_client_config_t config =
-    {
+    esp_http_client_config_t config = {
         .url = url,
-        .event_handler = http_event_handler
+        .event_handler = http_event_handler,
+        .crt_bundle_attach = esp_crt_bundle_attach,
     };
 
 
@@ -530,43 +533,38 @@ LampTask api_get_tasks(
     }
 
 
+cJSON *status =
+    cJSON_GetObjectItem(
+        json_task,
+        "status"
+    );
+
+cJSON *remaining =
+    cJSON_GetObjectItem(
+        json_task,
+        "remaining"
+    );
 
 
-    /*
-     * Timer
-     *
-     * Django should send:
-     *
-     * "timer_end": 1785366000
-     *
-     */
-
-    cJSON *timer =
-        cJSON_GetObjectItem(
-            json_task,
-            "timer_end"
-        );
+if(status && remaining)
+{
+    task.timer_running =
+        strcmp(
+            status->valuestring,
+            "active"
+        ) == 0;
 
 
-    if(timer &&
-       cJSON_IsNumber(timer))
-    {
-
-        task.has_timer = true;
+    task.remaining_seconds =
+        remaining->valueint;
 
 
-        task.timer_end =
-            (time_t)timer->valuedouble;
-
-
-        ESP_LOGI(
-            TAG,
-            "Timer end: %lld",
-            task.timer_end
-        );
-
-    }
-
+    task.has_timer = true;
+}
+else
+{
+    task.has_timer = false;
+}
 
 
     cJSON_Delete(root);
@@ -583,4 +581,183 @@ LampTask api_get_tasks(
 
 
 
+
+bool api_toggle_timer(const char *device_id)
+{
+    char token[256] = {0};
+
+
+    storage_get_token(
+        token,
+        sizeof(token)
+    );
+
+
+    if(strlen(token) == 0)
+    {
+        ESP_LOGE(
+            TAG,
+            "No auth token"
+        );
+
+        return false;
+    }
+
+
+
+    char url[256];
+
+
+    snprintf(
+        url,
+        sizeof(url),
+        "https://karanrobo.pythonanywhere.com/webapp/lamp/timer/toggle/?device_id=%s",
+        device_id
+    );
+
+
+
+    esp_http_client_config_t config = {
+        .url = url,
+        .event_handler = http_event_handler,
+        .crt_bundle_attach = esp_crt_bundle_attach,
+    };
+
+
+
+    esp_http_client_handle_t client =
+        esp_http_client_init(
+            &config
+        );
+
+
+    esp_http_client_set_method(
+        client,
+        HTTP_METHOD_POST
+    );
+
+
+    esp_http_client_set_header(
+        client,
+        "Authorization",
+        token
+    );
+
+
+
+    esp_err_t err =
+        esp_http_client_perform(
+            client
+        );
+
+
+
+    if(err != ESP_OK)
+    {
+
+        ESP_LOGE(
+            TAG,
+            "Toggle timer failed: %s",
+            esp_err_to_name(err)
+        );
+
+
+        esp_http_client_cleanup(
+            client
+        );
+
+
+        return false;
+    }
+
+
+
+    ESP_LOGI(
+        TAG,
+        "Toggle response: %s",
+        http_response
+    );
+
+
+
+    cJSON *root =
+        cJSON_Parse(
+            http_response
+        );
+
+
+    if(root == NULL)
+    {
+
+        ESP_LOGE(
+            TAG,
+            "JSON parse failed"
+        );
+
+
+        esp_http_client_cleanup(
+            client
+        );
+
+
+        return false;
+    }
+
+
+
+    cJSON *success =
+        cJSON_GetObjectItem(
+            root,
+            "success"
+        );
+
+
+    if(!cJSON_IsTrue(success))
+    {
+
+        ESP_LOGE(
+            TAG,
+            "Toggle failed"
+        );
+
+
+        cJSON_Delete(root);
+        esp_http_client_cleanup(client);
+
+        return false;
+    }
+
+
+
+    cJSON *status =
+        cJSON_GetObjectItem(
+            root,
+            "status"
+        );
+
+
+    if(status &&
+       cJSON_IsString(status))
+    {
+
+        ESP_LOGI(
+            TAG,
+            "Timer status: %s",
+            status->valuestring
+        );
+
+    }
+
+
+
+    cJSON_Delete(root);
+
+
+    esp_http_client_cleanup(
+        client
+    );
+
+
+    return true;
+}
 

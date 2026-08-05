@@ -20,149 +20,91 @@
 
 #include "esp32_tft.h"
 
-
 #include "esp_err.h"
-
 
 #include "esp32_ldr.h"
 #include "esp32_pir.h"
 #include "esp32_buttons.h"
 #include "esp32_buzzer.h"
 
-
-
-
- 
 #include "esp_adc/adc_oneshot.h"
 
- 
 #include "driver/ledc.h"
 
+#define LDR_ADC_GPIO 36
+#define LDR_ADC_UNIT ADC_UNIT_1
+#define LDR_ADC_CHANNEL ADC_CHANNEL_0
+#define LDR_ADC_ATTEN ADC_ATTEN_DB_12
 
-#define LDR_ADC_GPIO       36
-#define LDR_ADC_UNIT       ADC_UNIT_1
-#define LDR_ADC_CHANNEL    ADC_CHANNEL_0
-#define LDR_ADC_ATTEN      ADC_ATTEN_DB_12
- 
 /*
-* LED PWM output
-*/
-#define LED_PWM_GPIO       26
-#define LED_PWM_FREQUENCY  5000
+ * LED PWM output
+ */
+#define LED_PWM_GPIO 26
+#define LED_PWM_FREQUENCY 20000
 #define LED_PWM_RESOLUTION LEDC_TIMER_8_BIT
-#define LED_PWM_MAX_DUTY   255
- 
-#define UPDATE_PERIOD_MS   10
+#define LED_PWM_MAX_DUTY 255
+
+#define UPDATE_PERIOD_MS 10
 
 #define PIR_GPIO GPIO_NUM_27
 
 static const char *TAG = "lighting";
- 
+
+static void wifi_task(void *pvParameters);
+static void hardware_task(void *pvParameters);
+static void timer_task(void *pvParameters);
+
+static char device_id[32];
+
+
+LampTask task = {0};
+
+bool pause = false;
+
+bool light = false;
+
+bool setup = false;
+
+static bool manual_override = false;
+
+uint32_t inactivity_timer = 0; // milliseconds
+uint32_t inactivity_timeout = 15000;
+
 static adc_oneshot_unit_handle_t adc_handle;
 static LightingController lighting_controller;
- 
- 
-static void configure_adc(void)
-{
-    adc_oneshot_unit_init_cfg_t unit_config = {
-        .unit_id = LDR_ADC_UNIT,
-        .ulp_mode = ADC_ULP_MODE_DISABLE
-    };
- 
-    ESP_ERROR_CHECK(
-        adc_oneshot_new_unit(
-            &unit_config,
-            &adc_handle
-        )
-    );
- 
-    adc_oneshot_chan_cfg_t channel_config = {
-        .atten = LDR_ADC_ATTEN,
-        .bitwidth = ADC_BITWIDTH_DEFAULT
-    };
- 
-    ESP_ERROR_CHECK(
-        adc_oneshot_config_channel(
-            adc_handle,
-            LDR_ADC_CHANNEL,
-            &channel_config
-        )
-    );
- 
-    ESP_LOGI(
-        TAG,
-        "ADC configured: GPIO%d, ADC1 channel %d",
-        LDR_ADC_GPIO,
-        LDR_ADC_CHANNEL
-    );
-}
- 
- 
-static void configure_pwm(void)
-{
-    ledc_timer_config_t timer_config = {
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .duty_resolution = LED_PWM_RESOLUTION,
-        .timer_num = LEDC_TIMER_0,
-        .freq_hz = LED_PWM_FREQUENCY,
-        .clk_cfg = LEDC_AUTO_CLK
-    };
- 
-    ESP_ERROR_CHECK(
-        ledc_timer_config(&timer_config)
-    );
- 
-    ledc_channel_config_t channel_config = {
-        .gpio_num = LED_PWM_GPIO,
-        .speed_mode = LEDC_LOW_SPEED_MODE,
-        .channel = LEDC_CHANNEL_0,
-        .intr_type = LEDC_INTR_DISABLE,
-        .timer_sel = LEDC_TIMER_0,
-        .duty = 0,
-        .hpoint = 0
-    };
- 
-    ESP_ERROR_CHECK(
-        ledc_channel_config(&channel_config)
-    );
- 
-    ESP_LOGI(
-        TAG,
-        "PWM configured: GPIO%d, frequency=%d Hz",
-        LED_PWM_GPIO,
-        LED_PWM_FREQUENCY
-    );
-}
- 
- 
-static void set_pwm_duty(uint16_t duty)
-{
-    if (duty > LED_PWM_MAX_DUTY)
-    {
-        duty = LED_PWM_MAX_DUTY;
-    }
- 
-    ESP_ERROR_CHECK(
-        ledc_set_duty(
-            LEDC_LOW_SPEED_MODE,
-            LEDC_CHANNEL_0,
-            duty
-        )
-    );
- 
-    ESP_ERROR_CHECK(
-        ledc_update_duty(
-            LEDC_LOW_SPEED_MODE,
-            LEDC_CHANNEL_0
-        )
-    );
-}
 
- 
- 
+static void configure_adc(void);
+
+static void configure_pwm(void);
+
+static void set_pwm_duty(uint16_t duty);
 
 void app_main(void)
 {
+
+    configure_adc();
+    configure_pwm();
+
+    pir_init();
+    buttons_init();
+    buzzer_init();
+
+    Lighting_Init(
+        &lighting_controller,
+        300,
+        3500,
+        20,
+        255,
+        0.20f,
+        true);
+
+    xTaskCreate(
+        hardware_task,
+        "hardware_task",
+        4096,
+        NULL,
+        5,
+        NULL);
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
@@ -171,8 +113,6 @@ void app_main(void)
     /*
      * Create device identity
      */
-
-    char device_id[32] = {0};
 
     storage_get_device_id(
         device_id,
@@ -196,32 +136,6 @@ void app_main(void)
         "Device ID: %s",
         device_id);
 
- 
-
-    // char ssid[33];
-    // char pass[65];
-
-    // if (load_wifi_credentials(ssid, pass))
-    // {
-    //     ESP_LOGI(TAG, "Loaded saved WiFi: %s", ssid);
-
-    //     wifi_config_t sta_config = {0};
-
-    //     strcpy((char *)sta_config.sta.ssid, ssid);
-    //     strcpy((char *)sta_config.sta.password, pass);
-
-    //     ESP_ERROR_CHECK(
-    //         esp_wifi_set_config(WIFI_IF_STA, &sta_config));
-
-    //     ESP_ERROR_CHECK(esp_wifi_connect());
-    // }
-    // else
-    // {
-    //     ESP_LOGI(TAG, "No saved WiFi credentials");
-            wifi_init_softap();
-            start_webserver();
-    // }
-
     // VIS test
     lvgl_port_cfg_t lvgl_cfg =
         ESP_LVGL_PORT_INIT_CONFIG();
@@ -229,27 +143,54 @@ void app_main(void)
     ESP_ERROR_CHECK(
         lvgl_port_init(&lvgl_cfg));
 
-
     ESP_ERROR_CHECK(
         esp_oled_init());
+
+    // char ssid[33];
+    // char pass[65];
+
+    // if (load_wifi_credentials(ssid, pass))
+    // {
+    //     ESP_LOGI(TAG, "Loaded saved WiFi: %s", ssid);
+    //      esp_oled_update("Loading previous wifi");
+    // wifi_config_t sta_config = {0};
+
+    // strcpy((char *)sta_config.sta.ssid, ssid);
+    // strcpy((char *)sta_config.sta.password, pass);
+
+    // ESP_ERROR_CHECK(
+    //     esp_wifi_set_config(WIFI_IF_STA, &sta_config));
+
+    // ESP_ERROR_CHECK(esp_wifi_connect());
+
+    // else
+    // {
+    ESP_LOGI(TAG, "No saved WiFi credentials");
+    wifi_init_softap();
+    start_webserver();
+    // }
 
     while (!wifi_connected())
     {
         ESP_LOGI(
             TAG,
             "Waiting for home WiFi...");
-            esp_oled_update(
-                "Connect via phone!");
+        esp_oled_update(
+            "Connect Phone!");
 
-        vTaskDelay(
-            pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(5000));
+
+        esp_oled_update(
+            "Goto  \n http://192.168.4.1!");
+
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 
     ESP_LOGI(
         TAG,
-        "Home WiFi ready");
+        "WiFi ready");
     esp_oled_update(
-                "Connected to wifi!");
+        "Wifi Connected");
 
     if (storage_is_paired())
     {
@@ -258,7 +199,7 @@ void app_main(void)
             TAG,
             "Checking existing pairing...");
         esp_oled_update(
-                "Checking if you paired already.");
+            "Checking if you paired already.");
 
         bool valid =
             api_check_pair_status(
@@ -276,9 +217,11 @@ void app_main(void)
 
             storage_clear_token();
         }
-    } else {
-         esp_oled_update(
-                "New pairing required");
+    }
+    else
+    {
+        esp_oled_update(
+            "New pairing required");
     }
 
     /*
@@ -291,9 +234,9 @@ void app_main(void)
         ESP_LOGI(
             TAG,
             "Lamp not paired");
-        
-            esp_oled_update(
-                "Lamp not paired");
+
+        esp_oled_update(
+            "Lamp not paired");
 
         while (!api_register_lamp(device_id))
         {
@@ -301,7 +244,7 @@ void app_main(void)
             ESP_LOGW(
                 TAG,
                 "Registration failed");
-             esp_oled_update(
+            esp_oled_update(
                 "Registration failed. \n Trying again...");
 
             vTaskDelay(
@@ -314,7 +257,7 @@ void app_main(void)
             ESP_LOGI(
                 TAG,
                 "Waiting for user pairing");
-             esp_oled_update(
+            esp_oled_update(
                 "Waiting for user pairing");
 
             bool paired =
@@ -327,8 +270,8 @@ void app_main(void)
                 ESP_LOGI(
                     TAG,
                     "Pair successful");
-                 esp_oled_update(
-                "Paired successfully!");
+                esp_oled_update(
+                    "Paired successfully!");
 
                 break;
             }
@@ -347,7 +290,6 @@ void app_main(void)
             esp_oled_update(
                 pair_code);
 
-
             vTaskDelay(
                 pdMS_TO_TICKS(5000));
         }
@@ -356,148 +298,288 @@ void app_main(void)
     ESP_LOGI(
         TAG,
         "Lamp ready");
-
-    esp_oled_update(
-        "Connected");
-
+   
     vTaskDelay(
         pdMS_TO_TICKS(1000));
 
-   LampTask task = {0};
+    xTaskCreate(
+        wifi_task,
+        "wifi_task",
+        8192,
+        NULL,
+        5,
+        NULL);
+    xTaskCreate(
+    timer_task,
+    "timer_task",
+    2048,
+    NULL,
+    5,
+    NULL
+);
 
-int refresh_counter = 0;
+    setup = true;
 
-while (1)
+    while (1)
+    {
+        vTaskDelay(portMAX_DELAY);
+    }
+}
+
+static void wifi_task(void *pvParameters)
 {
-    /*
-     * Refresh task from Django every 10 seconds.
-     */
-    if (refresh_counter == 0)
+    int counter = 5;
+    while (1)
     {
-        task = api_get_tasks(device_id);
-    }
+        /*
+         * Refresh task from Django every 1 seconds.
+         */
+        if (counter == 0) {
+            task = api_get_tasks(device_id);
+            counter = 5;
+        }
 
-    if (!task.paired)
-    {
-
-        esp_oled_update(
-            "PAIR"
-        );
-    }
-    else if (!task.has_task)
-    {
-        esp_oled_update(
-            "No tasks"
-        );
-    }
-    else
-    {
-        esp_oled_update(
-            task.title
-        );
-
-        if (task.has_timer)
+        if (pause)
         {
-            time_t now;
-
-            time(&now);
-
-            int remaining =
-                (int)(task.timer_end - now);
-
-            if (remaining < 0)
+            if (api_toggle_timer(device_id))
             {
-                remaining = 0;
-            }
-
-            int hours =
-                remaining / 3600;
-
-            int minutes =
-                (remaining % 3600) / 60;
-
-            int seconds =
-                remaining % 60;
-
-            char buffer[20];
-
-            if (hours > 0)
-            {
-                snprintf(
-                    buffer,
-                    sizeof(buffer),
-                    "%02d:%02d:%02d",
-                    hours,
-                    minutes,
-                    seconds
-                );
+                ESP_LOGI(
+                    TAG,
+                    "TASK: %d",
+                    pause);
             }
             else
             {
-                snprintf(
-                    buffer,
-                    sizeof(buffer),
-                    "%02d:%02d",
-                    minutes,
-                    seconds
-                );
+                ESP_LOGI(TAG, "ERROR");
             }
-
-            esp_oled_update(buffer);
         }
-        else if (task.has_deadline)
-        {
-            time_t now;
 
-            time(&now);
-
-            int remaining =
-                (int)(task.deadline - now);
-
-            if (remaining < 0)
-            {
-                remaining = 0;
-            }
-
-            int days =
-                remaining / 86400;
-
-            int hours =
-                (remaining % 86400) / 3600;
-
-            char buffer[20];
-
-            snprintf(
-                buffer,
-                sizeof(buffer),
-                "%dd %02dh",
-                days,
-                hours
-            );
-
-            esp_oled_update(buffer);
-        }
-        else
-        {
-            esp_oled_update(
-                "No deadline"
-            );
-        }
+        esp_oled_update_task(task);
+        counter--;
+        vTaskDelay(
+            pdMS_TO_TICKS(1000));
     }
+}
 
-    refresh_counter++;
-
-    if (refresh_counter >= 1)
+static void timer_task(void *pvParameters)
+{
+    while(1)
     {
-        refresh_counter = 0;
+        if(task.timer_running)
+        {
+            if(task.remaining_seconds > 0)
+            {
+                task.remaining_seconds--;
+            }
+
+            if(task.remaining_seconds == 0)
+            {
+                task.timer_running = false;
+
+                buzzer_tone(1000, 500);
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+static void hardware_task(void *pvParameters)
+{
+    bool motion = false;
+
+    bool manual_override = false;
+    uint32_t manual_override_timer = 0;
+
+    while (1)
+    {
+        bool lb = light_button();
+        motion = pir_motion_detected();
+
+        /*-----------------------------
+         * Light Button (Highest Priority)
+         *----------------------------*/
+        if (lb)
+        {
+            ESP_LOGI(TAG, "Light button");
+            
+            buzzer_tone(1000, 100);   // 1000 Hz for 100 ms
+
+            light = !light;
+
+            if (light)
+            {
+                // User manually turned ON
+                manual_override = true;
+                manual_override_timer = 0;
+                inactivity_timer = 0;
+            }
+            else
+            {
+                // User manually turned OFF
+                manual_override = true;
+            }
+
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+        /*-----------------------------
+         * PIR Logic
+         *----------------------------*/
+        if (setup)
+        {
+            if (manual_override)
+            {
+                if (light)
+                {
+                    // Keep light ON during manual override period
+                    manual_override_timer += 100;
+
+                    if (manual_override_timer >= inactivity_timeout)
+                    {
+                        ESP_LOGI(TAG, "Manual override expired. PIR active.");
+
+                        manual_override = false;
+                        manual_override_timer = 0;
+                        inactivity_timer = 0;
+                    }
+                }
+
+                // If manually OFF, do nothing.
+                // PIR remains disabled until user presses button again.
+            }
+            else
+            {
+                // PIR has control
+                if (motion)
+                {
+                    inactivity_timer = 0;
+                    light = true;
+                }
+                else
+                {
+                    inactivity_timer += 100;
+
+                    if (inactivity_timer >= inactivity_timeout)
+                    {
+                        light = false;
+                    }
+                }
+            }
+        }
+
+        /*-----------------------------
+         * Pause Button
+         *----------------------------*/
+        if (pause_start_button())
+        {
+            ESP_LOGI(TAG, "Start button");
+
+            pause = !pause;
+
+            buzzer_tone(500, 100);   // 1000 Hz for 100 ms
+
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+
+        /*-----------------------------
+         * Lighting Control
+         *----------------------------*/
+        int adc_raw;
+
+        if (adc_oneshot_read(adc_handle,
+                             LDR_ADC_CHANNEL,
+                             &adc_raw) == ESP_OK)
+        {
+            uint16_t pwm = 0;
+
+            if (light)
+            {
+                pwm = Lighting_Update(
+                    &lighting_controller,
+                    (uint16_t)adc_raw);
+            }
+
+            set_pwm_duty(pwm);
+        }
+        buzzer_set(false);
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+static void configure_adc(void)
+{
+    adc_oneshot_unit_init_cfg_t unit_config = {
+        .unit_id = LDR_ADC_UNIT,
+        .ulp_mode = ADC_ULP_MODE_DISABLE};
+
+    ESP_ERROR_CHECK(
+        adc_oneshot_new_unit(
+            &unit_config,
+            &adc_handle));
+
+    adc_oneshot_chan_cfg_t channel_config = {
+        .atten = LDR_ADC_ATTEN,
+        .bitwidth = ADC_BITWIDTH_DEFAULT};
+
+    ESP_ERROR_CHECK(
+        adc_oneshot_config_channel(
+            adc_handle,
+            LDR_ADC_CHANNEL,
+            &channel_config));
+
+    ESP_LOGI(
+        TAG,
+        "ADC configured: GPIO%d, ADC1 channel %d",
+        LDR_ADC_GPIO,
+        LDR_ADC_CHANNEL);
+}
+
+static void configure_pwm(void)
+{
+    ledc_timer_config_t timer_config = {
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .duty_resolution = LED_PWM_RESOLUTION,
+        .timer_num = LEDC_TIMER_0,
+        .freq_hz = LED_PWM_FREQUENCY,
+        .clk_cfg = LEDC_AUTO_CLK};
+
+    ESP_ERROR_CHECK(
+        ledc_timer_config(&timer_config));
+
+    ledc_channel_config_t channel_config = {
+        .gpio_num = LED_PWM_GPIO,
+        .speed_mode = LEDC_LOW_SPEED_MODE,
+        .channel = LEDC_CHANNEL_0,
+        .intr_type = LEDC_INTR_DISABLE,
+        .timer_sel = LEDC_TIMER_0,
+        .duty = 0,
+        .hpoint = 0};
+
+    ESP_ERROR_CHECK(
+        ledc_channel_config(&channel_config));
+
+    ESP_LOGI(
+        TAG,
+        "PWM configured: GPIO%d, frequency=%d Hz",
+        LED_PWM_GPIO,
+        LED_PWM_FREQUENCY);
+}
+
+static void set_pwm_duty(uint16_t duty)
+{
+    if (duty > LED_PWM_MAX_DUTY)
+    {
+        duty = LED_PWM_MAX_DUTY;
     }
 
-    vTaskDelay(
-        pdMS_TO_TICKS(1000)
-    );
+    ESP_ERROR_CHECK(
+        ledc_set_duty(
+            LEDC_LOW_SPEED_MODE,
+            LEDC_CHANNEL_0,
+            duty));
+
+    ESP_ERROR_CHECK(
+        ledc_update_duty(
+            LEDC_LOW_SPEED_MODE,
+            LEDC_CHANNEL_0));
 }
-}
-
-
-
-
