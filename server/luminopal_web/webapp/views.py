@@ -491,10 +491,32 @@ def get_tasks(request):
                     task.description or "",
 
 
+                "status": task.status,
+
+
                 "timer_end":
                     int(task.timer_ends_at.timestamp())
                     if task.timer_ends_at
                     else 0,
+
+
+                "remaining":
+                    max(
+                        0,
+                        int(
+                            (
+                                task.timer_ends_at -
+                                timezone.now()
+                            ).total_seconds()
+                        )
+                    )
+                    if task.timer_ends_at
+                    else
+                    (
+                        int(task.timer_duration.total_seconds())
+                        if task.timer_duration
+                        else 0
+                    ),
 
 
                 "deadline":
